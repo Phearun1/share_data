@@ -1,0 +1,15 @@
+# Makes the Netlify build deterministic for this Next.js 16 app.
+# Ensures the Next.js runtime plugin runs and the correct output is published,
+# overriding any auto-detected/manual dashboard settings that caused a 404.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Next.js 16 requires Node 20.9+. Pin a current LTS so the build doesn't
+  # fail on an older default Node version.
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
