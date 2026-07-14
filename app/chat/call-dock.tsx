@@ -15,6 +15,7 @@ import {
   type OfferInfo,
 } from "@/lib/call";
 import { playPing, primeAudio, showNotification } from "@/lib/notify";
+import { Icon } from "../icons";
 
 type UiState = "idle" | "outgoing" | "active" | "incoming";
 
@@ -239,24 +240,24 @@ export function CallDock({ room, name }: { room: string; name: string }) {
   return (
     <>
       <button
-        className="call-btn"
+        className="icon-btn"
         type="button"
         onClick={() => void startCall(false)}
         disabled={ui !== "idle"}
         title="Voice call"
         aria-label="Voice call"
       >
-        📞
+        <Icon name="phone" size={18} />
       </button>
       <button
-        className="call-btn"
+        className="icon-btn"
         type="button"
         onClick={() => void startCall(true)}
         disabled={ui !== "idle"}
         title="Video call"
         aria-label="Video call"
       >
-        🎥
+        <Icon name="video" size={18} />
       </button>
 
       {error && <div className="call-toast">{error}</div>}

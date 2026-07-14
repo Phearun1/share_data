@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/format";
 import { ensureNotifyPermission, playPing, primeAudio, showNotification } from "@/lib/notify";
 import { deriveRoom } from "@/lib/room";
 import { CallDock } from "./call-dock";
+import { Icon } from "../icons";
 import { Logo } from "../logo";
 
 interface Reply {
@@ -42,6 +43,32 @@ function formatTime(ts: number): string {
     return "";
   }
 }
+
+function avatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return `hsl(${h} 58% 56%)`;
+}
+
+function initialOf(name: string): string {
+  return (name.trim()[0] || "?").toUpperCase();
+}
+
+function formatDay(ts: number): string {
+  const d = new Date(ts);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+}
+
+const GROUP_GAP = 5 * 60 * 1000; // start a new visual group after a 5-min gap
 
 function randomRoomCode(): string {
   const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -450,22 +477,42 @@ export default function ChatPage() {
     <main className="chat">
       <div className="chat-window">
         <div className="chat-head">
-          <span className="chat-room">
-            <span className="chat-room-dot" /> {code}
-          </span>
-          <span className="chat-head-actions">
+          <div className="chat-head-id">
+            <div className="room-avatar">
+              <Icon name="lock" size={17} />
+            </div>
+            <div className="room-meta">
+              <div className="room-title">{code}</div>
+              <div className="room-status">
+                {typingLabel ? (
+                  <span className="room-typing">{typingLabel}…</span>
+                ) : (
+                  "Private room"
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="chat-head-actions">
             <CallDock room={room} name={name} />
             <button
-              className="chat-change"
+              className="icon-btn"
               type="button"
               onClick={() => setShowInvite((s) => !s)}
+              title="Invite"
+              aria-label="Invite"
             >
-              Invite
+              <Icon name="share" size={18} />
             </button>
-            <button className="chat-change" type="button" onClick={leave}>
-              Leave
+            <button
+              className="icon-btn icon-btn-danger"
+              type="button"
+              onClick={leave}
+              title="Leave"
+              aria-label="Leave room"
+            >
+              <Icon name="logout" size={18} />
             </button>
-          </span>
+          </div>
         </div>
 
         {showInvite && (
@@ -497,78 +544,109 @@ export default function ChatPage() {
 
         <div className="chat-scroll" ref={scrollRef}>
           {messages.length === 0 ? (
-            <p className="muted-line">No messages yet — say hi 👋</p>
+            <div className="chat-empty">
+              <div className="chat-empty-icon">
+                <Icon name="lock" size={24} />
+              </div>
+              <div className="chat-empty-title">This room is private</div>
+              <div className="chat-empty-sub">
+                Only people with the link can see these messages. Say hi 👋
+              </div>
+            </div>
           ) : (
-            messages.map((m) => {
+            messages.map((m, i) => {
+              const prev = messages[i - 1];
+              const next = messages[i + 1];
               const mine = m.name === name;
               const isImg = m.file && INLINE_IMAGE.has(m.file.type);
+              const firstOfGroup = !prev || prev.name !== m.name || m.ts - prev.ts > GROUP_GAP;
+              const lastOfGroup = !next || next.name !== m.name || next.ts - m.ts > GROUP_GAP;
+              const showDay =
+                !prev || new Date(prev.ts).toDateString() !== new Date(m.ts).toDateString();
               return (
-                <div
-                  key={m.id}
-                  id={`msg-${m.id}`}
-                  className={`msg-row ${mine ? "msg-row-me" : "msg-row-them"}`}
-                >
-                  <div className={`msg ${mine ? "msg-me" : "msg-them"}`}>
-                    {!mine && <span className="msg-name">{m.name}</span>}
-                    {m.reply && (
-                      <button
-                        type="button"
-                        className="msg-reply-quote"
-                        onClick={() => scrollToMsg(m.reply!.id)}
-                      >
-                        <span className="msg-reply-quote-name">{m.reply.name}</span>
-                        <span className="msg-reply-quote-text">{m.reply.text}</span>
-                      </button>
-                    )}
-                    {m.file && isImg && (
-                      <button
-                        type="button"
-                        className="msg-img-btn"
-                        onClick={() => setLightbox(fileUrl(room, m.file!.id))}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img className="msg-img" src={fileUrl(room, m.file.id)} alt={m.file.name} />
-                      </button>
-                    )}
-                    {m.file && !isImg && (
-                      <a
-                        className="msg-file"
-                        href={fileUrl(room, m.file.id)}
-                        download={m.file.name}
-                      >
-                        <span className="msg-file-icon">📄</span>
-                        <span className="msg-file-meta">
-                          <span className="msg-file-name">{m.file.name}</span>
-                          <span className="msg-file-size">{formatBytes(m.file.size)}</span>
-                        </span>
-                      </a>
-                    )}
-                    {m.text && <span className="msg-text">{m.text}</span>}
-                    <span className="msg-time">{formatTime(m.ts)}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="msg-reply-btn"
-                    onClick={() => startReply(m)}
-                    title="Reply"
-                    aria-label="Reply"
+                <Fragment key={m.id}>
+                  {showDay && (
+                    <div className="day-sep">
+                      <span>{formatDay(m.ts)}</span>
+                    </div>
+                  )}
+                  <div
+                    id={`msg-${m.id}`}
+                    className={`msg-row ${mine ? "msg-row-me" : "msg-row-them"}${
+                      firstOfGroup ? " group-start" : ""
+                    }${lastOfGroup ? " group-end" : ""}`}
                   >
-                    ↩
-                  </button>
-                </div>
+                    {!mine &&
+                      (lastOfGroup ? (
+                        <span
+                          className="msg-avatar"
+                          style={{ background: avatarColor(m.name) }}
+                          aria-hidden
+                        >
+                          {initialOf(m.name)}
+                        </span>
+                      ) : (
+                        <span className="msg-avatar msg-avatar-spacer" aria-hidden />
+                      ))}
+                    <div className="msg-col">
+                      {!mine && firstOfGroup && <span className="msg-name">{m.name}</span>}
+                      <div className={`msg ${mine ? "msg-me" : "msg-them"}`}>
+                        {m.reply && (
+                          <button
+                            type="button"
+                            className="msg-reply-quote"
+                            onClick={() => scrollToMsg(m.reply!.id)}
+                          >
+                            <span className="msg-reply-quote-name">{m.reply.name}</span>
+                            <span className="msg-reply-quote-text">{m.reply.text}</span>
+                          </button>
+                        )}
+                        {m.file && isImg && (
+                          <button
+                            type="button"
+                            className="msg-img-btn"
+                            onClick={() => setLightbox(fileUrl(room, m.file!.id))}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              className="msg-img"
+                              src={fileUrl(room, m.file.id)}
+                              alt={m.file.name}
+                            />
+                          </button>
+                        )}
+                        {m.file && !isImg && (
+                          <a
+                            className="msg-file"
+                            href={fileUrl(room, m.file.id)}
+                            download={m.file.name}
+                          >
+                            <span className="msg-file-ic">
+                              <Icon name="download" size={18} />
+                            </span>
+                            <span className="msg-file-meta">
+                              <span className="msg-file-name">{m.file.name}</span>
+                              <span className="msg-file-size">{formatBytes(m.file.size)}</span>
+                            </span>
+                          </a>
+                        )}
+                        {m.text && <span className="msg-text">{m.text}</span>}
+                        {lastOfGroup && <span className="msg-time">{formatTime(m.ts)}</span>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="msg-reply-btn"
+                      onClick={() => startReply(m)}
+                      title="Reply"
+                      aria-label="Reply"
+                    >
+                      <Icon name="reply" size={15} />
+                    </button>
+                  </div>
+                </Fragment>
               );
             })
-          )}
-
-          {typingLabel && (
-            <div className="typing">
-              {typingLabel}
-              <span className="typing-dots">
-                <i />
-                <i />
-                <i />
-              </span>
-            </div>
           )}
         </div>
 
@@ -591,28 +669,37 @@ export default function ChatPage() {
           </div>
         )}
 
-        <form className="chat-composer" onSubmit={send}>
+        <form className="composer" onSubmit={send}>
           <button
             type="button"
-            className="attach-btn"
+            className="composer-icon"
             onClick={() => attachRef.current?.click()}
             disabled={uploading}
             aria-label="Attach a file or image"
             title="Attach a file or image"
           >
-            {uploading ? "…" : "📎"}
+            {uploading ? (
+              <span className="composer-spin" />
+            ) : (
+              <Icon name="paperclip" size={20} />
+            )}
           </button>
           <input
             ref={composerRef}
-            className="input"
+            className="composer-input"
             value={text}
-            placeholder="Message…"
+            placeholder="Message"
             maxLength={4000}
             onChange={(e) => onInput(e.target.value)}
             autoComplete="off"
           />
-          <button className="btn btn-primary" type="submit" disabled={!text.trim()}>
-            Send
+          <button
+            className="composer-send"
+            type="submit"
+            disabled={!text.trim()}
+            aria-label="Send message"
+          >
+            <Icon name="send" size={18} />
           </button>
           <input
             ref={attachRef}
