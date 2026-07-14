@@ -6,12 +6,18 @@ import { formatBytes } from "@/lib/format";
 import { deriveRoom } from "@/lib/room";
 import { Logo } from "../logo";
 
+interface Reply {
+  id: string;
+  name: string;
+  text: string;
+}
 interface Msg {
   id: string;
   name: string;
   text: string;
   ts: number;
   file?: { id: string; name: string; type: string; size: number };
+  reply?: Reply;
 }
 
 const NAME_KEY = "chat.name";
@@ -44,6 +50,12 @@ function randomRoomCode(): string {
   return out;
 }
 
+function snippet(m: Msg): string {
+  if (m.text) return m.text;
+  if (m.file) return INLINE_IMAGE.has(m.file.type) ? "📷 Photo" : `📄 ${m.file.name}`;
+  return "message";
+}
+
 const fileUrl = (room: string, id: string) =>
   `/api/chat/file?room=${encodeURIComponent(room)}&id=${id}`;
 
@@ -61,6 +73,8 @@ export default function ChatPage() {
   const [uploading, setUploading] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [qr, setQr] = useState("");
+  const [replyTarget, setReplyTarget] = useState<Reply | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   const [tmpName, setTmpName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -70,6 +84,7 @@ export default function ChatPage() {
   const seenRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const attachRef = useRef<HTMLInputElement | null>(null);
+  const composerRef = useRef<HTMLInputElement | null>(null);
   const lastTypingRef = useRef(0);
 
   const inviteUrl =
@@ -86,6 +101,7 @@ export default function ChatPage() {
       sinceRef.current = 0;
       seenRef.current = new Set();
       setMessages([]);
+      setReplyTarget(null);
       setName(n);
       setCode(c);
       setRoom(r);
@@ -95,7 +111,6 @@ export default function ChatPage() {
     [],
   );
 
-  // On load: honor an invite link (?r=CODE), otherwise resume the last room.
   useEffect(() => {
     const savedName = localStorage.getItem(NAME_KEY) ?? "";
     const savedCode = localStorage.getItem(CODE_KEY) ?? "";
@@ -111,7 +126,6 @@ export default function ChatPage() {
     }
   }, [enterRoom]);
 
-  // QR of the invite link.
   useEffect(() => {
     if (!inviteUrl) {
       setQr("");
@@ -135,6 +149,16 @@ export default function ChatPage() {
       alive = false;
     };
   }, [inviteUrl]);
+
+  // Close the lightbox with Escape.
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
 
   const ingest = useCallback((incoming: Msg[]) => {
     const fresh = incoming.filter((m) => m && m.id && !seenRef.current.has(m.id));
@@ -183,7 +207,7 @@ export default function ChatPage() {
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, typingNames, showInvite]);
+  }, [messages, typingNames, showInvite, replyTarget]);
 
   const createRoom = useCallback(() => {
     if (!tmpName.trim()) return;
@@ -212,6 +236,20 @@ export default function ChatPage() {
     }
   }, [inviteUrl]);
 
+  const startReply = useCallback((m: Msg) => {
+    setReplyTarget({ id: m.id, name: m.name, text: snippet(m) });
+    composerRef.current?.focus();
+  }, []);
+
+  const scrollToMsg = useCallback((id: string) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("msg-flash");
+      window.setTimeout(() => el.classList.remove("msg-flash"), 1200);
+    }
+  }, []);
+
   const onInput = useCallback(
     (v: string) => {
       setText(v);
@@ -234,11 +272,13 @@ export default function ChatPage() {
       const t = text.trim();
       if (!t) return;
       setText("");
+      const reply = replyTarget ?? undefined;
+      setReplyTarget(null);
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ room, name, text: t }),
+          body: JSON.stringify({ room, name, text: t, reply }),
         });
         if (res.ok) {
           const { message } = (await res.json()) as { message: Msg };
@@ -248,7 +288,7 @@ export default function ChatPage() {
         /* ignore */
       }
     },
-    [text, room, name, ingest],
+    [text, room, name, replyTarget, ingest],
   );
 
   const onAttach = useCallback(
@@ -287,7 +327,7 @@ export default function ChatPage() {
     [room, name, ingest],
   );
 
-  // ---- Landing (not in a room yet) ----
+  // ---- Landing ----
   if (!ready) {
     const joining = Boolean(incomingCode);
     return (
@@ -436,29 +476,58 @@ export default function ChatPage() {
               const mine = m.name === name;
               const isImg = m.file && INLINE_IMAGE.has(m.file.type);
               return (
-                <div key={m.id} className={`msg ${mine ? "msg-me" : "msg-them"}`}>
-                  {!mine && <span className="msg-name">{m.name}</span>}
-                  {m.file && isImg && (
-                    <a href={fileUrl(room, m.file.id)} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img className="msg-img" src={fileUrl(room, m.file.id)} alt={m.file.name} />
-                    </a>
-                  )}
-                  {m.file && !isImg && (
-                    <a
-                      className="msg-file"
-                      href={fileUrl(room, m.file.id)}
-                      download={m.file.name}
-                    >
-                      <span className="msg-file-icon">📄</span>
-                      <span className="msg-file-meta">
-                        <span className="msg-file-name">{m.file.name}</span>
-                        <span className="msg-file-size">{formatBytes(m.file.size)}</span>
-                      </span>
-                    </a>
-                  )}
-                  {m.text && <span className="msg-text">{m.text}</span>}
-                  <span className="msg-time">{formatTime(m.ts)}</span>
+                <div
+                  key={m.id}
+                  id={`msg-${m.id}`}
+                  className={`msg-row ${mine ? "msg-row-me" : "msg-row-them"}`}
+                >
+                  <div className={`msg ${mine ? "msg-me" : "msg-them"}`}>
+                    {!mine && <span className="msg-name">{m.name}</span>}
+                    {m.reply && (
+                      <button
+                        type="button"
+                        className="msg-reply-quote"
+                        onClick={() => scrollToMsg(m.reply!.id)}
+                      >
+                        <span className="msg-reply-quote-name">{m.reply.name}</span>
+                        <span className="msg-reply-quote-text">{m.reply.text}</span>
+                      </button>
+                    )}
+                    {m.file && isImg && (
+                      <button
+                        type="button"
+                        className="msg-img-btn"
+                        onClick={() => setLightbox(fileUrl(room, m.file!.id))}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img className="msg-img" src={fileUrl(room, m.file.id)} alt={m.file.name} />
+                      </button>
+                    )}
+                    {m.file && !isImg && (
+                      <a
+                        className="msg-file"
+                        href={fileUrl(room, m.file.id)}
+                        download={m.file.name}
+                      >
+                        <span className="msg-file-icon">📄</span>
+                        <span className="msg-file-meta">
+                          <span className="msg-file-name">{m.file.name}</span>
+                          <span className="msg-file-size">{formatBytes(m.file.size)}</span>
+                        </span>
+                      </a>
+                    )}
+                    {m.text && <span className="msg-text">{m.text}</span>}
+                    <span className="msg-time">{formatTime(m.ts)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="msg-reply-btn"
+                    onClick={() => startReply(m)}
+                    title="Reply"
+                    aria-label="Reply"
+                  >
+                    ↩
+                  </button>
                 </div>
               );
             })
@@ -478,6 +547,23 @@ export default function ChatPage() {
 
         {attachError && <p className="error">{attachError}</p>}
 
+        {replyTarget && (
+          <div className="reply-bar">
+            <div className="reply-bar-content">
+              <span className="reply-bar-name">Replying to {replyTarget.name}</span>
+              <span className="reply-bar-text">{replyTarget.text}</span>
+            </div>
+            <button
+              className="reply-bar-x"
+              type="button"
+              onClick={() => setReplyTarget(null)}
+              aria-label="Cancel reply"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <form className="chat-composer" onSubmit={send}>
           <button
             type="button"
@@ -490,6 +576,7 @@ export default function ChatPage() {
             {uploading ? "…" : "📎"}
           </button>
           <input
+            ref={composerRef}
             className="input"
             value={text}
             placeholder="Message…"
@@ -512,6 +599,26 @@ export default function ChatPage() {
           />
         </form>
       </div>
+
+      {lightbox && (
+        <div className="lightbox" onClick={() => setLightbox(null)}>
+          <button
+            className="lightbox-x"
+            type="button"
+            onClick={() => setLightbox(null)}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="lightbox-img"
+            src={lightbox}
+            alt="attachment"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </main>
   );
 }

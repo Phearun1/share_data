@@ -17,12 +17,18 @@ export interface ChatFile {
   type: string;
   size: number;
 }
+export interface ReplyRef {
+  id: string;
+  name: string;
+  text: string;
+}
 export interface ChatMessage {
   id: string;
   name: string;
   text: string;
   ts: number;
   file?: ChatFile;
+  reply?: ReplyRef;
 }
 export interface TypingInfo {
   name: string;
@@ -67,9 +73,17 @@ export async function putMessage(
   text: string,
   ts: number,
   file?: ChatFile,
+  reply?: ReplyRef,
 ): Promise<ChatMessage> {
   const id = `${pad(ts)}_${randomBytes(4).toString("hex")}`;
-  const msg: ChatMessage = { id, name, text, ts, ...(file ? { file } : {}) };
+  const msg: ChatMessage = {
+    id,
+    name,
+    text,
+    ts,
+    ...(file ? { file } : {}),
+    ...(reply ? { reply } : {}),
+  };
   try {
     await msgStore().setJSON(`${room}/${id}`, msg);
   } catch (err) {
