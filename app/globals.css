@@ -285,6 +285,22 @@ a {
   transition: width 0.15s ease;
 }
 
+/* Upload progress isn't measurable via the signed-URL API, so we show an
+   indeterminate sweeping bar instead of a percentage. */
+.progress-indeterminate {
+  width: 40%;
+  animation: indeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    margin-left: -40%;
+  }
+  100% {
+    margin-left: 100%;
+  }
+}
+
 .progress-label {
   font-variant-numeric: tabular-nums;
   font-weight: 600;

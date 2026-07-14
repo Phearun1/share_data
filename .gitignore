@@ -42,3 +42,6 @@ next-env.d.ts
 
 # uploaded files (runtime storage)
 /storage
+
+# allow the placeholder example (no secrets) to be committed
+!.env.local.example

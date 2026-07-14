@@ -4,17 +4,16 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * File store for one-time transfers.
+ * Metadata store for one-time transfers.
  *
- * Primary backend: Netlify Blobs (works automatically when deployed on
- * Netlify). Each upload is stored under key <id> with its metadata attached.
+ * The file *bytes* live in Supabase Storage (see lib/supabase.ts). This module
+ * only keeps small JSON metadata records — one per upload — keyed by id:
+ *   { id, name, size, type, createdAt }
  *
- * Fallback backend: local disk under storage/ — used when the Netlify Blobs
- * environment is absent (i.e. `npm run dev`/`npm run start` on your machine
- * without the Netlify CLI), so local development still works.
+ * Backend: Netlify Blobs when deployed on Netlify; a local `storage/` folder as
+ * a fallback for `npm run dev` without the Netlify CLI.
  *
- * "Delete after first download" is implemented by deleting the blob (or the
- * on-disk files) as it is served.
+ * The Supabase object key for an upload is simply its id.
  */
 
 export interface FileMeta {
@@ -25,9 +24,10 @@ export interface FileMeta {
   createdAt: number;
 }
 
-const STORE_NAME = "uploads";
+const STORE_NAME = "meta";
 
-// Ids only ever contain these characters, so they are safe keys / path segments.
+// Ids only ever contain these characters, so they are safe keys / path segments
+// and safe Supabase object keys.
 const ID_RE = /^[A-Za-z0-9_-]+$/;
 
 export function newId(): string {
@@ -57,8 +57,6 @@ export function sanitizeName(raw: string): string {
 // --- backend selection -----------------------------------------------------
 
 function blobStore() {
-  // Strong consistency: a just-uploaded file must be visible to the immediate
-  // download request, and a delete must take effect right away (one-time link).
   return getStore({ name: STORE_NAME, consistency: "strong" });
 }
 
@@ -75,16 +73,14 @@ function isMissingBlobsEnv(err: unknown): boolean {
 // --- disk fallback ---------------------------------------------------------
 
 const STORAGE_DIR = path.join(process.cwd(), "storage");
-const diskPayload = (id: string) => path.join(STORAGE_DIR, id);
 const diskMeta = (id: string) => path.join(STORAGE_DIR, `${id}.json`);
 
-async function diskSave(id: string, data: ArrayBuffer, meta: FileMeta): Promise<void> {
+async function diskSave(meta: FileMeta): Promise<void> {
   await mkdir(STORAGE_DIR, { recursive: true });
-  await writeFile(diskPayload(id), Buffer.from(data));
-  await writeFile(diskMeta(id), JSON.stringify(meta), "utf8");
+  await writeFile(diskMeta(meta.id), JSON.stringify(meta), "utf8");
 }
 
-async function diskGetMeta(id: string): Promise<FileMeta | null> {
+async function diskGet(id: string): Promise<FileMeta | null> {
   try {
     return JSON.parse(await readFile(diskMeta(id), "utf8")) as FileMeta;
   } catch {
@@ -92,64 +88,36 @@ async function diskGetMeta(id: string): Promise<FileMeta | null> {
   }
 }
 
-async function diskTake(id: string): Promise<{ data: ArrayBuffer; meta: FileMeta } | null> {
-  const meta = await diskGetMeta(id);
-  if (!meta) return null;
-  let buf: Buffer;
-  try {
-    buf = await readFile(diskPayload(id));
-  } catch {
-    return null;
-  }
-  await Promise.all([
-    unlink(diskPayload(id)).catch(() => {}),
-    unlink(diskMeta(id)).catch(() => {}),
-  ]);
-  // Copy into a standalone ArrayBuffer (Buffer may be pooled / shared-backed).
-  const data = new ArrayBuffer(buf.byteLength);
-  new Uint8Array(data).set(buf);
-  return { data, meta };
+async function diskDelete(id: string): Promise<void> {
+  await unlink(diskMeta(id)).catch(() => {});
 }
 
 // --- public API (blobs first, disk fallback) -------------------------------
 
-export async function saveUpload(id: string, data: ArrayBuffer, meta: FileMeta): Promise<void> {
+export async function saveMeta(meta: FileMeta): Promise<void> {
   try {
-    await blobStore().set(id, data, { metadata: meta as unknown as Record<string, unknown> });
+    await blobStore().setJSON(meta.id, meta);
   } catch (err) {
-    if (isMissingBlobsEnv(err)) return diskSave(id, data, meta);
+    if (isMissingBlobsEnv(err)) return diskSave(meta);
     throw err;
   }
 }
 
-/** Read metadata only (for the download landing page). Non-destructive. */
-export async function getUploadMeta(id: string): Promise<FileMeta | null> {
+export async function getMeta(id: string): Promise<FileMeta | null> {
   if (!isValidId(id)) return null;
   try {
-    const result = await blobStore().getMetadata(id);
-    return result ? (result.metadata as unknown as FileMeta) : null;
+    return (await blobStore().get(id, { type: "json" })) as FileMeta | null;
   } catch (err) {
-    if (isMissingBlobsEnv(err)) return diskGetMeta(id);
+    if (isMissingBlobsEnv(err)) return diskGet(id);
     throw err;
   }
 }
 
-/** Read the file and delete it (one-time download). Returns null if gone. */
-export async function takeUpload(
-  id: string,
-): Promise<{ data: ArrayBuffer; meta: FileMeta } | null> {
-  if (!isValidId(id)) return null;
+export async function deleteMeta(id: string): Promise<void> {
   try {
-    const store = blobStore();
-    const result = await store.getWithMetadata(id, { type: "arrayBuffer" });
-    if (!result || result.data == null) return null;
-    await store.delete(id).catch(() => {});
-    return {
-      data: result.data as ArrayBuffer,
-      meta: result.metadata as unknown as FileMeta,
-    };
+    await blobStore().delete(id);
   } catch (err) {
-    if (isMissingBlobsEnv(err)) return diskTake(id);
+    if (isMissingBlobsEnv(err)) return diskDelete(id);
     throw err;
   }
 }

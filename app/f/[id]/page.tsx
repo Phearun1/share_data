@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { formatBytes } from "@/lib/format";
-import { getUploadMeta } from "@/lib/storage";
+import { getMeta } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export default async function DownloadPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const meta = await getUploadMeta(id);
+  const meta = await getMeta(id);
 
   if (!meta) {
     return (
