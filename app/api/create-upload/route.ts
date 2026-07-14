@@ -43,8 +43,15 @@ export async function POST(req: NextRequest) {
   let ticket: { token: string; path: string };
   try {
     ticket = await createUploadTicket(id);
-  } catch {
-    return Response.json({ error: "Could not start the upload." }, { status: 502 });
+  } catch (err) {
+    // Surface the real Supabase message (e.g. "Bucket not found", "Invalid JWT")
+    // so configuration problems are diagnosable instead of a blank 502.
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("create-upload: Supabase createSignedUploadUrl failed:", detail);
+    return Response.json(
+      { error: `Could not start the upload. Storage said: ${detail}` },
+      { status: 502 },
+    );
   }
 
   // Record metadata now. If the browser upload fails, this record is orphaned
