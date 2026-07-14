@@ -869,6 +869,39 @@ a {
   cursor: default;
 }
 
+/* invite panel */
+.invite {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  margin: 4px 0 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+/* "or" separator on the chat landing */
+.or-sep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.or-sep::before,
+.or-sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--card-border);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

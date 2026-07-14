@@ -16,7 +16,6 @@ interface Msg {
 
 const NAME_KEY = "chat.name";
 const CODE_KEY = "chat.code";
-const PASS_KEY = "chat.pass";
 const SEEN_KEY = "chat.lastSeen";
 
 const INLINE_IMAGE = new Set([
@@ -51,20 +50,21 @@ const fileUrl = (room: string, id: string) =>
 export default function ChatPage() {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
-  const [pass, setPass] = useState("");
   const [room, setRoom] = useState("");
   const [ready, setReady] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const [attachError, setAttachError] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
+  const [qr, setQr] = useState("");
 
   const [tmpName, setTmpName] = useState("");
-  const [tmpCode, setTmpCode] = useState("");
-  const [tmpPass, setTmpPass] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [incomingCode, setIncomingCode] = useState("");
 
   const sinceRef = useRef(0);
   const seenRef = useRef<Set<string>>(new Set());
@@ -72,24 +72,69 @@ export default function ChatPage() {
   const attachRef = useRef<HTMLInputElement | null>(null);
   const lastTypingRef = useRef(0);
 
-  // Restore a saved session.
+  const inviteUrl =
+    code && typeof window !== "undefined" ? `${window.location.origin}/chat?r=${code}` : "";
+
+  const enterRoom = useCallback(
+    async (theCode: string, theName: string, openInvite = false) => {
+      const c = theCode.trim();
+      const n = theName.trim().slice(0, 40);
+      if (!c || !n) return;
+      const r = await deriveRoom(c);
+      localStorage.setItem(NAME_KEY, n);
+      localStorage.setItem(CODE_KEY, c);
+      sinceRef.current = 0;
+      seenRef.current = new Set();
+      setMessages([]);
+      setName(n);
+      setCode(c);
+      setRoom(r);
+      setShowInvite(openInvite);
+      setReady(true);
+    },
+    [],
+  );
+
+  // On load: honor an invite link (?r=CODE), otherwise resume the last room.
   useEffect(() => {
-    const n = localStorage.getItem(NAME_KEY) ?? "";
-    const c = localStorage.getItem(CODE_KEY) ?? "";
-    const p = localStorage.getItem(PASS_KEY) ?? "";
-    setTmpName(n);
-    setTmpCode(c);
-    setTmpPass(p);
-    if (n && c) {
-      void deriveRoom(c, p).then((r) => {
-        setName(n);
-        setCode(c);
-        setPass(p);
-        setRoom(r);
-        setReady(true);
-      });
+    const savedName = localStorage.getItem(NAME_KEY) ?? "";
+    const savedCode = localStorage.getItem(CODE_KEY) ?? "";
+    setTmpName(savedName);
+    const r = (new URLSearchParams(window.location.search).get("r") ?? "")
+      .toUpperCase()
+      .slice(0, 40);
+    if (r) {
+      setIncomingCode(r);
+      if (savedName) void enterRoom(r, savedName);
+    } else if (savedName && savedCode) {
+      void enterRoom(savedCode, savedName);
     }
-  }, []);
+  }, [enterRoom]);
+
+  // QR of the invite link.
+  useEffect(() => {
+    if (!inviteUrl) {
+      setQr("");
+      return;
+    }
+    let alive = true;
+    import("qrcode")
+      .then((mod) => {
+        const QR = ((mod as unknown as { default?: unknown }).default ?? mod) as {
+          toDataURL: (t: string, o?: unknown) => Promise<string>;
+        };
+        return QR.toDataURL(inviteUrl, {
+          margin: 1,
+          width: 264,
+          color: { dark: "#101223", light: "#ffffff" },
+        });
+      })
+      .then((u) => alive && setQr(u))
+      .catch(() => alive && setQr(""));
+    return () => {
+      alive = false;
+    };
+  }, [inviteUrl]);
 
   const ingest = useCallback((incoming: Msg[]) => {
     const fresh = incoming.filter((m) => m && m.id && !seenRef.current.has(m.id));
@@ -97,12 +142,10 @@ export default function ChatPage() {
     fresh.forEach((m) => seenRef.current.add(m.id));
     const maxTs = Math.max(sinceRef.current, ...fresh.map((m) => m.ts));
     sinceRef.current = maxTs;
-    // We're viewing the chat, so treat everything up to here as read.
     localStorage.setItem(SEEN_KEY, String(maxTs));
     setMessages((prev) => [...prev, ...fresh].sort((a, b) => a.ts - b.ts));
   }, []);
 
-  // Poll messages + typing.
   useEffect(() => {
     if (!ready || !room) return;
     let stopped = false;
@@ -126,7 +169,7 @@ export default function ChatPage() {
           );
         }
       } catch {
-        // retry next tick
+        // retry
       }
     };
     void poll();
@@ -140,37 +183,34 @@ export default function ChatPage() {
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, typingNames]);
+  }, [messages, typingNames, showInvite]);
 
-  const join = useCallback(async () => {
-    const n = tmpName.trim().slice(0, 40);
-    const c = tmpCode.trim();
-    if (!n || !c) return;
-    const r = await deriveRoom(c, tmpPass);
-    localStorage.setItem(NAME_KEY, n);
-    localStorage.setItem(CODE_KEY, c);
-    localStorage.setItem(PASS_KEY, tmpPass);
-    sinceRef.current = 0;
-    seenRef.current = new Set();
-    setMessages([]);
-    setName(n);
-    setCode(c);
-    setPass(tmpPass);
-    setRoom(r);
-    setReady(true);
-  }, [tmpName, tmpCode, tmpPass]);
+  const createRoom = useCallback(() => {
+    if (!tmpName.trim()) return;
+    void enterRoom(randomRoomCode(), tmpName, true);
+  }, [tmpName, enterRoom]);
 
-  const copyRoom = useCallback(async () => {
+  const leave = useCallback(() => {
+    setReady(false);
+    setShowInvite(false);
+    setIncomingCode("");
+    setJoinCode("");
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/chat");
+    }
+  }, []);
+
+  const copyInvite = useCallback(async () => {
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(code);
-        setCopiedCode(true);
-        window.setTimeout(() => setCopiedCode(false), 1500);
+        await navigator.clipboard.writeText(inviteUrl);
+        setCopiedInvite(true);
+        window.setTimeout(() => setCopiedInvite(false), 1800);
       }
     } catch {
       /* ignore */
     }
-  }, [code]);
+  }, [inviteUrl]);
 
   const onInput = useCallback(
     (v: string) => {
@@ -247,16 +287,18 @@ export default function ChatPage() {
     [room, name, ingest],
   );
 
+  // ---- Landing (not in a room yet) ----
   if (!ready) {
+    const joining = Boolean(incomingCode);
     return (
       <main className="page">
         <div className="shell">
           <header className="masthead">
             <Logo />
-            <h1 className="title">Chat</h1>
+            <h1 className="title">{joining ? "Join chat" : "Chat"}</h1>
             <p className="eyebrow">
               <span className="dot" />
-              Private room
+              {joining ? "You were invited" : "Private room"}
             </p>
           </header>
           <section className="card">
@@ -270,60 +312,69 @@ export default function ChatPage() {
               maxLength={40}
               placeholder="e.g. Kim"
               onChange={(e) => setTmpName(e.target.value)}
-            />
-            <label className="field-label" htmlFor="chat-code">
-              Room code
-            </label>
-            <div className="copy-row">
-              <input
-                id="chat-code"
-                className="input"
-                value={tmpCode}
-                placeholder="make one up or generate"
-                onChange={(e) => setTmpCode(e.target.value)}
-              />
-              <button
-                className="btn"
-                type="button"
-                onClick={() => setTmpCode(randomRoomCode())}
-              >
-                Generate
-              </button>
-            </div>
-            <label className="field-label" htmlFor="chat-pass">
-              Password (optional)
-            </label>
-            <input
-              id="chat-pass"
-              className="input"
-              type="password"
-              value={tmpPass}
-              placeholder="extra secret — leave blank for none"
-              onChange={(e) => setTmpPass(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void join();
+                if (e.key === "Enter") {
+                  if (joining) void enterRoom(incomingCode, tmpName);
+                  else createRoom();
+                }
               }}
             />
-            <button
-              className="btn btn-primary btn-block"
-              type="button"
-              onClick={() => void join()}
-              disabled={!tmpName.trim() || !tmpCode.trim()}
-            >
-              Join chat
-            </button>
-            <p className="hint">
-              You and your friend need the <strong>same room code</strong> (and
-              password, if set). A password keeps the room private even if someone
-              guesses the code — the messages are stored under a key only you two
-              can make.
-            </p>
+
+            {joining ? (
+              <>
+                <button
+                  className="btn btn-primary btn-block"
+                  type="button"
+                  onClick={() => void enterRoom(incomingCode, tmpName)}
+                  disabled={!tmpName.trim()}
+                >
+                  Join room
+                </button>
+                <p className="hint">
+                  You&apos;re joining a room your friend created. Just pick a name.
+                </p>
+              </>
+            ) : (
+              <>
+                <button
+                  className="btn btn-primary btn-block"
+                  type="button"
+                  onClick={createRoom}
+                  disabled={!tmpName.trim()}
+                >
+                  Create a room
+                </button>
+                <p className="muted-line">
+                  You&apos;ll get a link and QR code to share with your friend.
+                </p>
+                <div className="or-sep">
+                  <span>or join with a code</span>
+                </div>
+                <div className="copy-row">
+                  <input
+                    className="input"
+                    value={joinCode}
+                    placeholder="paste a room code"
+                    onChange={(e) => setJoinCode(e.target.value)}
+                  />
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => void enterRoom(joinCode, tmpName)}
+                    disabled={!joinCode.trim() || !tmpName.trim()}
+                  >
+                    Join
+                  </button>
+                </div>
+              </>
+            )}
           </section>
         </div>
       </main>
     );
   }
 
+  // ---- In a room ----
   const typingLabel =
     typingNames.length === 0
       ? ""
@@ -335,17 +386,47 @@ export default function ChatPage() {
         <div className="chat-head">
           <span className="chat-room">
             <span className="chat-room-dot" /> {code}
-            {pass ? <span className="chat-lock">🔒</span> : null}
           </span>
           <span className="chat-head-actions">
-            <button className="chat-change" type="button" onClick={copyRoom}>
-              {copiedCode ? "Copied ✓" : "Copy code"}
+            <button
+              className="chat-change"
+              type="button"
+              onClick={() => setShowInvite((s) => !s)}
+            >
+              Invite
             </button>
-            <button className="chat-change" type="button" onClick={() => setReady(false)}>
-              Change
+            <button className="chat-change" type="button" onClick={leave}>
+              Leave
             </button>
           </span>
         </div>
+
+        {showInvite && (
+          <div className="invite">
+            <p className="muted-line">Send this to your friend so they can join:</p>
+            <div className="copy-row">
+              <input
+                className="input"
+                readOnly
+                value={inviteUrl}
+                onFocus={(e) => e.currentTarget.select()}
+              />
+              <button className="btn btn-primary" type="button" onClick={copyInvite}>
+                {copiedInvite ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            {qr && (
+              <div className="qr">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={qr} alt="QR code to join the chat" />
+                <span className="qr-hint">Scan to join on a phone</span>
+              </div>
+            )}
+            <button className="btn btn-block" type="button" onClick={() => setShowInvite(false)}>
+              Done
+            </button>
+          </div>
+        )}
 
         <div className="chat-scroll" ref={scrollRef}>
           {messages.length === 0 ? (

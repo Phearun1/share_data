@@ -23,14 +23,13 @@ export function Nav() {
       return;
     }
     const name = localStorage.getItem("chat.name") ?? "";
-    const pass = localStorage.getItem("chat.pass") ?? "";
 
     let stopped = false;
     let room = "";
     const check = async () => {
       if (stopped) return;
       try {
-        if (!room) room = await deriveRoom(code, pass);
+        if (!room) room = await deriveRoom(code);
         let seen = Number(localStorage.getItem("chat.lastSeen") ?? "0") || 0;
         if (!seen) {
           // First time: don't badge the whole history.
