@@ -22,6 +22,16 @@ function formatTime(ts: number): string {
   }
 }
 
+/** Random, easy-to-read room code (no easily-confused characters). */
+function randomRoomCode(): string {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < 8; i += 1) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
 export default function ChatPage() {
   const [name, setName] = useState("");
   const [room, setRoom] = useState("");
@@ -30,6 +40,7 @@ export default function ChatPage() {
   const [text, setText] = useState("");
   const [tmpName, setTmpName] = useState("");
   const [tmpRoom, setTmpRoom] = useState("");
+  const [copiedCode, setCopiedCode] = useState(false);
 
   const sinceRef = useRef(0);
   const seenRef = useRef<Set<string>>(new Set());
@@ -102,6 +113,18 @@ export default function ChatPage() {
     setReady(true);
   }, [tmpName, tmpRoom]);
 
+  const copyRoom = useCallback(async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(room);
+        setCopiedCode(true);
+        window.setTimeout(() => setCopiedCode(false), 1500);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [room]);
+
   const send = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -152,16 +175,25 @@ export default function ChatPage() {
             <label className="field-label" htmlFor="chat-room">
               Room code
             </label>
-            <input
-              id="chat-room"
-              className="input"
-              value={tmpRoom}
-              placeholder="e.g. kim-and-friend"
-              onChange={(e) => setTmpRoom(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") join();
-              }}
-            />
+            <div className="copy-row">
+              <input
+                id="chat-room"
+                className="input"
+                value={tmpRoom}
+                placeholder="make one up or generate"
+                onChange={(e) => setTmpRoom(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") join();
+                }}
+              />
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setTmpRoom(randomRoomCode())}
+              >
+                Generate
+              </button>
+            </div>
             <button
               className="btn btn-primary btn-block"
               type="button"
@@ -171,8 +203,10 @@ export default function ChatPage() {
               Join chat
             </button>
             <p className="hint">
-              You and your friend just need the same room code. Anyone with the
-              code can read the messages, so pick something only you two know.
+              Type your own room code or tap <strong>Generate</strong>, then share
+              it with your friend — you both use the <strong>same code</strong> to
+              land in the same chat. Anyone with the code can read it, so keep it
+              private.
             </p>
           </section>
         </div>
@@ -187,13 +221,18 @@ export default function ChatPage() {
           <span className="chat-room">
             <span className="chat-room-dot" /> {room}
           </span>
-          <button
-            className="chat-change"
-            type="button"
-            onClick={() => setReady(false)}
-          >
-            Change
-          </button>
+          <span className="chat-head-actions">
+            <button className="chat-change" type="button" onClick={copyRoom}>
+              {copiedCode ? "Copied ✓" : "Copy code"}
+            </button>
+            <button
+              className="chat-change"
+              type="button"
+              onClick={() => setReady(false)}
+            >
+              Change
+            </button>
+          </span>
         </div>
 
         <div className="chat-scroll" ref={scrollRef}>

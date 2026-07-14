@@ -654,6 +654,11 @@ a {
   background: var(--success);
 }
 
+.chat-head-actions {
+  display: flex;
+  gap: 14px;
+}
+
 .chat-change {
   appearance: none;
   border: none;
