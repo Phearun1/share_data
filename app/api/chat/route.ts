@@ -1,4 +1,4 @@
-import { getMessages, putMessage } from "@/lib/chat";
+import { getMessages, getTyping, putMessage } from "@/lib/chat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +33,6 @@ export async function GET(req: Request) {
   if (!ROOM_RE.test(room)) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  const messages = await getMessages(room, since);
-  return Response.json({ messages, now: Date.now() });
+  const [messages, typing] = await Promise.all([getMessages(room, since), getTyping(room)]);
+  return Response.json({ messages, typing, now: Date.now() });
 }
