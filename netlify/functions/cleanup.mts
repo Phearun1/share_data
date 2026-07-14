@@ -14,7 +14,7 @@ const PAGE = 1000;
 export default async function handler(): Promise<Response> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket = process.env.SUPABASE_BUCKET || "uploads";
+  const bucket = process.env.SUPABASE_BUCKET || "upload";
 
   if (!url || !key) {
     return new Response("Supabase not configured", { status: 200 });

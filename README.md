@@ -18,7 +18,7 @@ how you get 50 MB instead of ~4 MB.
 
 1. Sign up at <https://supabase.com> and create a **New project** (any name/region).
 2. In the project sidebar go to **Storage → New bucket**:
-   - Name it **`uploads`**
+   - Name it **`upload`**
    - Keep **Public** turned **OFF** (private bucket — files are only reachable
      through the temporary links this app creates).
 3. Go to **Project Settings → API** and copy three values:
@@ -29,7 +29,7 @@ how you get 50 MB instead of ~4 MB.
 ### 2. Add those values to Netlify
 
 In your Netlify site: **Site configuration → Environment variables → Add a
-variable**, and add all three (plus optionally `SUPABASE_BUCKET=uploads`). Then
+variable**, and add all three (plus optionally `SUPABASE_BUCKET=upload`). Then
 **redeploy** (Deploys → Trigger deploy → Deploy site) so the new values take
 effect — `NEXT_PUBLIC_*` values are baked in at build time.
 
