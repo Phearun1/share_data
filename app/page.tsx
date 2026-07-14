@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/format";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/limits";
+import { Logo } from "./logo";
 
 type Status = "idle" | "uploading" | "done" | "error";
 
@@ -26,6 +27,7 @@ export default function HomePage() {
   const [copied, setCopied] = useState(false);
   const [hint, setHint] = useState("");
   const [live, setLive] = useState("");
+  const [qr, setQr] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Prevent the browser from navigating away when a file is dropped anywhere
@@ -39,6 +41,36 @@ export default function HomePage() {
       window.removeEventListener("drop", prevent);
     };
   }, []);
+
+  // Render a QR code for the share link (loaded lazily, only when needed).
+  useEffect(() => {
+    if (!result) {
+      setQr("");
+      return;
+    }
+    let alive = true;
+    import("qrcode")
+      .then((mod) => {
+        // qrcode is a CommonJS module; grab toDataURL through interop safely.
+        const QR = ((mod as unknown as { default?: unknown }).default ?? mod) as {
+          toDataURL: (text: string, opts?: unknown) => Promise<string>;
+        };
+        return QR.toDataURL(result.url, {
+          margin: 1,
+          width: 264,
+          color: { dark: "#101223", light: "#ffffff" },
+        });
+      })
+      .then((url) => {
+        if (alive) setQr(url);
+      })
+      .catch(() => {
+        if (alive) setQr("");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [result]);
 
   const upload = useCallback(async (file: File) => {
     if (file.size > MAX_UPLOAD_BYTES) {
@@ -118,7 +150,6 @@ export default function HomePage() {
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (file) void upload(file);
-      // Reset so picking the same file again re-triggers change.
       event.target.value = "";
     },
     [upload],
@@ -152,7 +183,6 @@ export default function HomePage() {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(result.url);
       } else {
-        // Non-secure context (e.g. http on a LAN IP): clipboard API is absent.
         field?.select();
         if (!document.execCommand?.("copy")) throw new Error("copy unavailable");
       }
@@ -166,94 +196,143 @@ export default function HomePage() {
 
   return (
     <main className="page">
-      <section className="card">
-        <h1 className="title">Send a file</h1>
-        <p className="subtitle">
-          Upload a file (up to {MAX_UPLOAD_LABEL}), get a one-time link, and share
-          it. The file is deleted after the first download.
-        </p>
+      <div className="shell">
+        <header className="masthead">
+          <Logo />
+          <h1 className="title">Send a file</h1>
+          <p className="eyebrow">
+            <span className="dot" />
+            One-time link · up to {MAX_UPLOAD_LABEL}
+          </p>
+        </header>
 
-        {status === "done" && result ? (
-          <div className="result">
-            <div className="icon icon-success" aria-hidden>
-              ✓
-            </div>
-            <div className="file-row">
-              <span className="file-name" title={result.name}>
-                {result.name}
-              </span>
-              <span className="file-size">{formatBytes(result.size)}</span>
-            </div>
-            <label className="field-label" htmlFor="share-url">
-              Share this link
-            </label>
-            <div className="copy-row">
-              <input
-                id="share-url"
-                className="input"
-                readOnly
-                value={result.url}
-                onFocus={(e) => e.currentTarget.select()}
-              />
-              <button className="btn btn-primary" onClick={copyLink} type="button">
-                {copied ? "Copied!" : "Copy"}
+        <section className="card">
+          {status === "done" && result ? (
+            <div className="result">
+              <div className="result-head">
+                <span className="check">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <h2>Ready to send</h2>
+              </div>
+
+              <div className="file-row">
+                <span className="file-name" title={result.name}>
+                  {result.name}
+                </span>
+                <span className="file-size">{formatBytes(result.size)}</span>
+              </div>
+
+              {qr && (
+                <div className="qr">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qr} alt="QR code linking to the download page" />
+                  <span className="qr-hint">Scan to open it on a phone</span>
+                </div>
+              )}
+
+              <label className="field-label" htmlFor="share-url">
+                Share this link
+              </label>
+              <div className="copy-row">
+                <input
+                  id="share-url"
+                  className="input"
+                  readOnly
+                  value={result.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <button className="btn btn-primary" onClick={copyLink} type="button">
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              {hint && <p className="hint">{hint}</p>}
+
+              <button className="btn btn-block" onClick={reset} type="button">
+                Send another file
               </button>
             </div>
-            {hint && <p className="hint">{hint}</p>}
-            <button className="btn btn-block" onClick={reset} type="button">
-              Send another file
-            </button>
-          </div>
-        ) : status === "uploading" ? (
-          <div className="uploading">
-            <div
-              className="progress"
-              role="progressbar"
-              aria-label="Uploading"
-              aria-valuetext="Uploading"
-            >
-              <div className="progress-bar progress-indeterminate" />
+          ) : status === "uploading" ? (
+            <div className="uploading">
+              <div
+                className="progress"
+                role="progressbar"
+                aria-label="Uploading"
+                aria-valuetext="Uploading"
+              >
+                <div className="progress-bar progress-indeterminate" />
+              </div>
+              <div className="progress-label">Uploading…</div>
             </div>
-            <div className="progress-label">Uploading…</div>
-          </div>
-        ) : (
-          <>
-            <div
-              className={`dropzone${dragging ? " dropzone-active" : ""}`}
-              onClick={() => inputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+          ) : (
+            <>
+              <div
+                className={`dropzone${dragging ? " dropzone-active" : ""}`}
+                onClick={() => inputRef.current?.click()}
+                onDragOver={(e) => {
                   e.preventDefault();
-                  inputRef.current?.click();
-                }
-              }}
-            >
-              <div className="icon" aria-hidden>
-                ⬆
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    inputRef.current?.click();
+                  }
+                }}
+              >
+                <span className="drop-icon">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M12 16V4" />
+                    <path d="m7 9 5-5 5 5" />
+                    <path d="M5 20h14" />
+                  </svg>
+                </span>
+                <div className="dropzone-text">
+                  <strong>Click to choose a file</strong>
+                  <br />
+                  or drag &amp; drop it here
+                </div>
               </div>
-              <div className="dropzone-text">
-                <strong>Click to choose a file</strong> or drag &amp; drop it here
-              </div>
-            </div>
-            {status === "error" && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-          </>
-        )}
+              {status === "error" && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+            </>
+          )}
 
-        <input ref={inputRef} type="file" hidden onChange={onPick} />
-      </section>
-      <p className="footer">Files are stored privately and removed after download.</p>
+          <input ref={inputRef} type="file" hidden onChange={onPick} />
+        </section>
+
+        <p className="footer">Files are stored privately and removed after download.</p>
+      </div>
+
       {/* Always-mounted live region so screen readers hear state changes. */}
       <div className="sr-only" role="status" aria-live="polite">
         {live}
