@@ -654,6 +654,9 @@ export default function ChatPage() {
 
         {replyTarget && (
           <div className="reply-bar">
+            <span className="reply-bar-icon">
+              <Icon name="reply" size={16} />
+            </span>
             <div className="reply-bar-content">
               <span className="reply-bar-name">Replying to {replyTarget.name}</span>
               <span className="reply-bar-text">{replyTarget.text}</span>
@@ -664,7 +667,7 @@ export default function ChatPage() {
               onClick={() => setReplyTarget(null)}
               aria-label="Cancel reply"
             >
-              ✕
+              <Icon name="x" size={16} />
             </button>
           </div>
         )}
