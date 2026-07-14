@@ -44,12 +44,6 @@ function formatTime(ts: number): string {
   }
 }
 
-function avatarColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) % 360;
-  return `hsl(${h} 58% 56%)`;
-}
-
 function initialOf(name: string): string {
   return (name.trim()[0] || "?").toUpperCase();
 }
@@ -578,11 +572,7 @@ export default function ChatPage() {
                   >
                     {!mine &&
                       (lastOfGroup ? (
-                        <span
-                          className="msg-avatar"
-                          style={{ background: avatarColor(m.name) }}
-                          aria-hidden
-                        >
+                        <span className="msg-avatar" aria-hidden>
                           {initialOf(m.name)}
                         </span>
                       ) : (

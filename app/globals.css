@@ -1,50 +1,63 @@
+/* Black & white minimalist — grayscale surfaces + one restrained blue accent.
+   "Ink" tokens (--primary-bg/fg) drive the mono primary surfaces (logo, primary
+   buttons, "me" bubbles) and invert cleanly between light and dark. */
 :root {
-  --bg-0: #e9ebf6;
-  --bg-1: #f6f7fc;
-  --glow: rgba(109, 94, 252, 0.22);
-  --glow-2: rgba(139, 123, 255, 0.14);
+  --bg-0: #ffffff;
+  --bg-1: #fbfbfa;
+  --glow: transparent;
+  --glow-2: transparent;
   --card: #ffffff;
-  --card-border: #e6e8f4;
-  --card-inset: #f6f7fc;
-  --ink: #181a2e;
-  --ink-soft: #464a6b;
-  --muted: #7a7fa2;
-  --accent: #6d5efc;
-  --accent-2: #8b7bff;
-  --accent-strong: #5646e6;
-  --accent-tint: #eef0ff;
-  --success: #12a150;
-  --success-tint: rgba(18, 161, 80, 0.12);
-  --danger: #e5484d;
-  --ring: rgba(109, 94, 252, 0.4);
-  --dash: #ccd1e8;
+  --card-border: #e7e7e7;
+  --card-inset: #f4f4f5;
+  --ink: #0f0f11;
+  --ink-soft: #3f3f46;
+  --muted: #6b6b74;
+  --accent: #2f6feb;
+  --accent-2: #2f6feb;
+  --accent-strong: #1f5fdc;
+  --accent-tint: #eef3fe;
+  --success: #2f6feb;
+  --success-tint: rgba(47, 111, 235, 0.12);
+  --danger: #dc2626;
+  --ring: rgba(47, 111, 235, 0.35);
+  --dash: #d4d4d8;
   --sheen: rgba(255, 255, 255, 0);
-  --shadow: 0 30px 70px -24px rgba(24, 26, 60, 0.35), 0 8px 24px -12px rgba(24, 26, 60, 0.18);
+  --primary-bg: #111114;
+  --primary-fg: #ffffff;
+  --accent-on: #ffffff;
+  --danger-ink: #b91c1c;
+  --danger-solid: #dc2626;
+  --shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.2), 0 4px 14px -8px rgba(0, 0, 0, 0.09);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-0: #070812;
-    --bg-1: #0f1122;
-    --glow: rgba(124, 108, 255, 0.28);
-    --glow-2: rgba(90, 70, 230, 0.18);
-    --card: #14162a;
-    --card-border: #262a45;
-    --card-inset: #1b1e36;
-    --ink: #edeefb;
-    --ink-soft: #c3c6e0;
-    --muted: #8b90b5;
-    --accent: #7c6cff;
-    --accent-2: #9a8bff;
-    --accent-strong: #9484ff;
-    --accent-tint: #1b1e38;
-    --success: #3dd68c;
-    --success-tint: rgba(61, 214, 140, 0.14);
-    --danger: #ff6369;
-    --ring: rgba(124, 108, 255, 0.5);
-    --dash: #3a4068;
-    --sheen: rgba(255, 255, 255, 0.06);
-    --shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.7), 0 10px 30px -14px rgba(0, 0, 0, 0.5);
+    --bg-0: #0a0a0b;
+    --bg-1: #0e0e10;
+    --glow: transparent;
+    --glow-2: transparent;
+    --card: #151517;
+    --card-border: #2a2a2e;
+    --card-inset: #1c1c1f;
+    --ink: #fafafa;
+    --ink-soft: #d4d4d8;
+    --muted: #8b8b93;
+    --accent: #5b8dff;
+    --accent-2: #5b8dff;
+    --accent-strong: #7aa2ff;
+    --accent-tint: #17233d;
+    --success: #5b8dff;
+    --success-tint: rgba(91, 141, 255, 0.14);
+    --danger: #f26363;
+    --ring: rgba(91, 141, 255, 0.4);
+    --dash: #35353b;
+    --sheen: rgba(255, 255, 255, 0.05);
+    --primary-bg: #fafafa;
+    --primary-fg: #101012;
+    --accent-on: #101012;
+    --danger-ink: #f26363;
+    --danger-solid: #dc2626;
+    --shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.7), 0 6px 20px -12px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -129,10 +142,10 @@ a {
   width: 52px;
   height: 52px;
   border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(145deg, #8b7bff, #6a4dff);
+  color: var(--primary-fg);
+  background: var(--primary-bg);
   box-shadow:
-    0 10px 24px -6px var(--ring),
+    0 10px 24px -6px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
   transform: rotate(-4deg);
 }
@@ -198,8 +211,7 @@ a {
   padding: 40px 22px;
   border-radius: 16px;
   border: 1.5px dashed var(--dash);
-  background:
-    radial-gradient(22rem 12rem at 50% 0%, var(--accent-tint), transparent 70%);
+  background: transparent;
   cursor: pointer;
   text-align: center;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease,
@@ -231,7 +243,7 @@ a {
   color: var(--accent-strong);
   background: var(--card);
   border: 1px solid var(--card-border);
-  box-shadow: 0 8px 20px -10px var(--ring);
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.16);
 }
 
 .dropzone:hover .drop-icon,
@@ -287,15 +299,13 @@ a {
 
 .btn-primary {
   border-color: transparent;
-  color: #fff;
-  background-color: #6a4dff;
-  background-image: linear-gradient(135deg, #8b7bff, #6a4dff);
-  box-shadow: 0 14px 30px -12px rgba(106, 77, 255, 0.6);
+  color: var(--primary-fg);
+  background: var(--primary-bg);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  filter: brightness(1.06);
+  opacity: 0.9;
 }
 
 .btn-block {
@@ -506,7 +516,7 @@ a {
   padding: 11px 13px;
   border-radius: 11px;
   background: rgba(229, 72, 77, 0.1);
-  color: var(--danger);
+  color: var(--danger-ink);
   font-size: 13.5px;
   font-weight: 550;
   text-align: center;
@@ -587,9 +597,9 @@ a {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  color: #fff;
-  background: linear-gradient(145deg, #8b7bff, #6a4dff);
-  box-shadow: 0 6px 16px -8px var(--ring);
+  color: var(--primary-fg);
+  background: var(--primary-bg);
+  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.2);
 }
 
 .nav-tabs {
@@ -664,9 +674,9 @@ a {
   border-radius: 12px;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(145deg, #8b7bff, #6a4dff);
-  box-shadow: 0 6px 16px -8px var(--ring);
+  color: var(--primary-fg);
+  background: var(--primary-bg);
+  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.2);
 }
 
 .room-meta {
@@ -766,8 +776,8 @@ a {
 }
 
 .msg-me {
-  color: #fff;
-  background: linear-gradient(135deg, #8b7bff, #6a4dff);
+  color: var(--primary-fg);
+  background: var(--primary-bg);
 }
 
 /* grouped-bubble tail: only the last bubble of a run gets the notch */
@@ -813,7 +823,8 @@ a {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: #fff;
+  background: var(--ink-soft);
+  color: var(--bg-0);
   font-size: 12.5px;
   font-weight: 700;
 }
@@ -922,8 +933,8 @@ a {
   border-left-color: var(--accent);
 }
 .msg-me .msg-reply-quote {
-  background: rgba(255, 255, 255, 0.18);
-  border-left-color: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--primary-fg) 14%, transparent);
+  border-left-color: color-mix(in srgb, var(--primary-fg) 55%, transparent);
 }
 
 .msg-reply-quote-name {
@@ -936,7 +947,7 @@ a {
   color: var(--accent-strong);
 }
 .msg-me .msg-reply-quote-name {
-  color: #fff;
+  color: var(--primary-fg);
 }
 
 .msg-reply-quote-text {
@@ -950,7 +961,7 @@ a {
   color: var(--ink);
 }
 .msg-me .msg-reply-quote-text {
-  color: #fff;
+  color: var(--primary-fg);
 }
 
 .msg-flash .msg {
@@ -1141,18 +1152,18 @@ a {
   display: grid;
   place-items: center;
   font-size: 38px;
-  background: linear-gradient(145deg, #8b7bff, #6a4dff);
-  box-shadow: 0 12px 40px -8px rgba(106, 77, 255, 0.6);
+  background: var(--accent);
+  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.28);
   animation: callpulse 1.6s ease-out infinite;
 }
 
 @keyframes callpulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(139, 123, 255, 0.5);
+    box-shadow: 0 0 0 0 var(--ring);
   }
   70% {
-    box-shadow: 0 0 0 20px rgba(139, 123, 255, 0);
+    box-shadow: 0 0 0 20px transparent;
   }
 }
 
@@ -1184,16 +1195,17 @@ a {
 }
 
 .call-accept {
-  background: #16a34a;
+  background: var(--accent);
+  color: var(--accent-on);
 }
 .call-accept:hover {
-  background: #15803d;
+  background: var(--accent-strong);
 }
 .call-decline {
-  background: #dc2626;
+  background: var(--danger-solid);
 }
 .call-decline:hover {
-  background: #b91c1c;
+  filter: brightness(0.92);
 }
 
 .call-remote {
@@ -1279,7 +1291,7 @@ a {
   left: 50%;
   transform: translateX(-50%);
   z-index: 130;
-  background: var(--danger);
+  background: var(--danger-solid);
   color: #fff;
   padding: 10px 16px;
   border-radius: 10px;
@@ -1384,10 +1396,10 @@ a {
   border-radius: 12px;
   display: grid;
   place-items: center;
-  color: #fff;
+  color: var(--primary-fg);
   cursor: pointer;
-  background: linear-gradient(135deg, #8b7bff, #6a4dff);
-  box-shadow: 0 8px 18px -8px rgba(106, 77, 255, 0.6);
+  background: var(--primary-bg);
+  box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.28);
   transition: filter 0.12s ease, opacity 0.12s ease;
 }
 
@@ -1435,8 +1447,8 @@ a {
   margin-left: 6px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--danger);
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-on);
   font-size: 11px;
   font-weight: 700;
   vertical-align: middle;
