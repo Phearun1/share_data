@@ -10,6 +10,10 @@
   # Next.js 16 requires Node 20.9+. Pin a current LTS so the build doesn't
   # fail on an older default Node version.
   NODE_VERSION = "22"
+  # These NEXT_PUBLIC_* values are meant to be in the browser bundle (Supabase's
+  # public URL + anon key), so exclude them from Netlify's secret scanner.
+  # The secret SUPABASE_SERVICE_ROLE_KEY is NOT listed here and stays scanned.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
