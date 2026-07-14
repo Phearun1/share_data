@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Nav } from "./nav";
 
 export const metadata: Metadata = {
   title: "Send a file",
-  description: "Upload a file and share a one-time download link.",
+  description: "Share files and chat — one-time links, same-network transfer, and a private chat.",
 };
 
 export default function RootLayout({
@@ -13,7 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Nav />
+        <div className="app-main">{children}</div>
+      </body>
     </html>
   );
 }

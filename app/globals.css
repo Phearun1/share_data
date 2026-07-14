@@ -60,6 +60,8 @@ body {
 
 body {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   color: var(--ink);
   background-color: var(--bg-0);
   background-image:
@@ -73,12 +75,20 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 a {
   color: inherit;
 }
 
 .page {
-  min-height: 100vh;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -540,6 +550,180 @@ a {
   letter-spacing: 0.2em;
   font-size: 18px;
   padding: 13px 12px;
+}
+
+/* --- top navbar --------------------------------------------------------- */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--card-border);
+  background: color-mix(in srgb, var(--bg-1) 78%, transparent);
+  backdrop-filter: saturate(1.3) blur(12px);
+  -webkit-backdrop-filter: saturate(1.3) blur(12px);
+}
+
+.nav-logo {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.nav-logo-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(145deg, #8b7bff, #6a4dff);
+  box-shadow: 0 6px 16px -8px var(--ring);
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--card-inset);
+  border: 1px solid var(--card-border);
+}
+
+.nav-tab {
+  padding: 7px 15px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-tab:hover {
+  color: var(--ink);
+}
+
+.nav-tab-active {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 4px 12px -8px rgba(24, 26, 60, 0.5);
+}
+
+/* --- chat --------------------------------------------------------------- */
+
+.chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  padding: 12px 14px 14px;
+}
+
+.chat-window {
+  width: 100%;
+  max-width: 620px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 10px;
+}
+
+.chat-room {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+
+.chat-room-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.chat-change {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 4px 14px;
+}
+
+.msg {
+  max-width: 80%;
+  padding: 9px 13px;
+  border-radius: 15px;
+  font-size: 14.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.msg-them {
+  align-self: flex-start;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-bottom-left-radius: 5px;
+}
+
+.msg-me {
+  align-self: flex-end;
+  color: #fff;
+  background: linear-gradient(135deg, #8b7bff, #6a4dff);
+  border-bottom-right-radius: 5px;
+}
+
+.msg-name {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  margin-bottom: 2px;
+}
+
+.msg-time {
+  font-size: 10.5px;
+  opacity: 0.65;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.chat-composer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 4px 4px;
+  border-top: 1px solid var(--card-border);
+}
+
+.chat-composer .input {
+  flex: 1;
+  font-family: inherit;
+  font-size: 15px;
 }
 
 .sr-only {
