@@ -3,7 +3,7 @@ import { clearRoom, getSignals, putSignal, type Role } from "@/lib/signal";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ROOM_RE = /^[A-Za-z0-9_-]{4,40}$/;
+const ROOM_RE = /^[A-Za-z0-9_-]{4,64}$/;
 const isRole = (v: unknown): v is Role => v === "s" || v === "r";
 
 // POST { room, from, seq, msg } — store one signaling message.

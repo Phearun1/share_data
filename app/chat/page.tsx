@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/format";
+import { ensureNotifyPermission, playPing, primeAudio, showNotification } from "@/lib/notify";
 import { deriveRoom } from "@/lib/room";
+import { CallDock } from "./call-dock";
 import { Logo } from "../logo";
 
 interface Reply {
@@ -86,6 +88,7 @@ export default function ChatPage() {
   const attachRef = useRef<HTMLInputElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const lastTypingRef = useRef(0);
+  const joinTsRef = useRef(0);
 
   const inviteUrl =
     code && typeof window !== "undefined" ? `${window.location.origin}/chat?r=${code}` : "";
@@ -100,6 +103,7 @@ export default function ChatPage() {
       localStorage.setItem(CODE_KEY, c);
       sinceRef.current = 0;
       seenRef.current = new Set();
+      joinTsRef.current = Date.now();
       setMessages([]);
       setReplyTarget(null);
       setName(n);
@@ -107,6 +111,8 @@ export default function ChatPage() {
       setRoom(r);
       setShowInvite(openInvite);
       setReady(true);
+      primeAudio();
+      void ensureNotifyPermission();
     },
     [],
   );
@@ -174,7 +180,7 @@ export default function ChatPage() {
     if (!ready || !room) return;
     let stopped = false;
     const poll = async () => {
-      if (document.hidden || stopped) return;
+      if (stopped) return;
       try {
         const res = await fetch(
           `/api/chat?room=${encodeURIComponent(room)}&since=${sinceRef.current}`,
@@ -184,7 +190,22 @@ export default function ChatPage() {
             messages: Msg[];
             typing?: { name: string; ts: number }[];
           };
-          ingest(data.messages ?? []);
+          const incoming = data.messages ?? [];
+          // Alert for genuinely new messages from others while the tab is hidden.
+          const newOthers = incoming.filter(
+            (m) =>
+              m &&
+              m.id &&
+              !seenRef.current.has(m.id) &&
+              m.name !== name &&
+              m.ts > joinTsRef.current,
+          );
+          ingest(incoming);
+          if (newOthers.length > 0 && document.hidden) {
+            playPing();
+            const last = newOthers[newOthers.length - 1];
+            showNotification(last.name, last.file ? "📎 Attachment" : last.text);
+          }
           const now = Date.now();
           setTypingNames(
             (data.typing ?? [])
@@ -198,9 +219,14 @@ export default function ChatPage() {
     };
     void poll();
     const iv = window.setInterval(poll, 2500);
+    const onVis = () => {
+      if (!document.hidden) void poll();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       stopped = true;
       window.clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [ready, room, name, ingest]);
 
@@ -428,6 +454,7 @@ export default function ChatPage() {
             <span className="chat-room-dot" /> {code}
           </span>
           <span className="chat-head-actions">
+            <CallDock room={room} name={name} />
             <button
               className="chat-change"
               type="button"

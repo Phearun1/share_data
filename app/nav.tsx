@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { playPing, primeAudio, showNotification } from "@/lib/notify";
 import { deriveRoom } from "@/lib/room";
 
 export function Nav() {
@@ -26,6 +27,7 @@ export function Nav() {
 
     let stopped = false;
     let room = "";
+    const notified = new Set<string>();
     const check = async () => {
       if (stopped) return;
       try {
@@ -40,8 +42,18 @@ export function Nav() {
           `/api/chat?room=${encodeURIComponent(room)}&since=${seen}`,
         );
         if (res.ok) {
-          const data = (await res.json()) as { messages: { name: string }[] };
-          setUnread((data.messages ?? []).filter((m) => m.name !== name).length);
+          const data = (await res.json()) as {
+            messages: { id: string; name: string; text?: string; file?: unknown }[];
+          };
+          const others = (data.messages ?? []).filter((m) => m.name !== name);
+          setUnread(others.length);
+          const fresh = others.filter((m) => m.id && !notified.has(m.id));
+          fresh.forEach((m) => notified.add(m.id));
+          if (fresh.length > 0) {
+            playPing();
+            const last = fresh[fresh.length - 1];
+            showNotification(last.name, last.file ? "📎 Attachment" : last.text || "New message");
+          }
         }
       } catch {
         // ignore
@@ -53,7 +65,21 @@ export function Nav() {
       stopped = true;
       window.clearInterval(iv);
     };
-  }, [onChat, path]);
+    // Depend on onChat (not path): navigating between two non-chat routes must
+    // NOT reset the `notified` set, or already-seen messages would ping again.
+  }, [onChat]);
+
+  // Unlock audio on the first user interaction anywhere so background pings
+  // (from other tabs/pages) can actually play.
+  useEffect(() => {
+    const unlock = () => primeAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   return (
     <header className="nav">
