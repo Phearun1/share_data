@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   // Record metadata now. If the browser upload fails, this record is orphaned
   // (the link is never shown to the user) and the scheduled cleanup removes it.
   try {
-    await saveMeta({ id, name, size, type, createdAt: Date.now() });
+    await saveMeta({ id, name, size, type, createdAt: Date.now(), storage: "supabase" });
   } catch {
     return Response.json({ error: "Could not start the upload." }, { status: 500 });
   }

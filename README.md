@@ -55,17 +55,49 @@ That's it. Open your `.netlify.app` URL, upload a file, and share the link.
 - `lib/storage.ts` keeps tiny metadata records in Netlify Blobs (with a local-disk
   fallback for dev). `lib/supabase.ts` holds the server-side Supabase helpers.
 
-## Run locally
+## Local mode — send files on the same network (no internet)
+
+Use this when the cloud version is **blocked** by someone's network (office/school
+Wi‑Fi and work laptops often block uploads to outside services). Local mode runs
+the app **on your Mac**; the other person connects over the **same Wi‑Fi**, and the
+file uploads straight to your Mac — nothing goes to the internet, so nothing gets
+blocked. Files up to **2 GB**.
+
+1. On your Mac, in this folder:
+
+   ```bash
+   npm install        # first time only
+   npm run local      # starts the app on your network
+   ```
+
+2. Find your Mac's Wi‑Fi IP address:
+
+   ```bash
+   ipconfig getifaddr en0
+   ```
+
+   (e.g. `192.168.1.24`. If that's blank, try `en1`.)
+
+3. Make sure **both devices are on the same Wi‑Fi**. The other person opens
+   **`http://<your-ip>:3000`** in their browser (e.g. `http://192.168.1.24:3000`).
+
+4. They upload a file → get a link → share it → download. All on the local network.
+
+Notes:
+- Keep the Terminal running `npm run local` open — closing it stops the app.
+- macOS may ask to **allow incoming connections** the first time — click Allow.
+- Files are saved in `share-web/storage/` on your Mac and deleted after download.
+
+## Run locally (development)
 
 ```bash
 cd share-web
-cp .env.local.example .env.local      # then fill in your Supabase values
 npm install
-npm run dev                           # http://localhost:3000
+npm run dev                           # http://localhost:3000 (local mode)
 ```
 
-Without the Supabase env vars the upload button will report that storage isn't
-configured — fill in `.env.local` to test uploads locally.
+For the cloud (Supabase) flow locally, copy `.env.local.example` to `.env.local`,
+fill in your Supabase values, and use `npm run dev`.
 
 ## Notes & limits
 

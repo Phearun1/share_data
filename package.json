@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "local": "NEXT_PUBLIC_LOCAL_MODE=1 next dev -H 0.0.0.0"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.9",

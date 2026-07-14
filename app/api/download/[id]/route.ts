@@ -1,8 +1,32 @@
-import { deleteMeta, getMeta, isValidId } from "@/lib/storage";
+import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
+
+import {
+  deleteDiskFile,
+  deleteMeta,
+  diskFilePath,
+  diskFileSize,
+  getMeta,
+  isValidId,
+} from "@/lib/storage";
 import { createDownloadUrl } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** Build a Content-Disposition header with an ASCII fallback + UTF-8 name. */
+function contentDisposition(name: string): string {
+  const asciiFallback =
+    Array.from(name)
+      .map((ch) => {
+        const code = ch.codePointAt(0) ?? 0;
+        const printable = code >= 0x20 && code < 0x7f;
+        return printable && ch !== '"' && ch !== "\\" ? ch : "_";
+      })
+      .join("") || "download";
+  const encoded = encodeURIComponent(name);
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
 
 function gone(): Response {
   return new Response(
@@ -11,12 +35,7 @@ function gone(): Response {
   );
 }
 
-// POST (not GET) so link scanners, prefetchers, and unfurlers that follow safe
-// methods cannot consume a one-time link; only a deliberate click burns it.
-//
-// We mint a short-lived signed URL and 302-redirect the browser straight to
-// Supabase, so the file bytes stream directly from storage (never through this
-// function, avoiding Netlify's response-size limit).
+// POST (not GET) so link scanners and prefetchers can't consume a one-time link.
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -31,18 +50,47 @@ export async function POST(
     return gone();
   }
 
+  // --- Local mode: stream the bytes straight from this server's disk. --------
+  if (meta.storage === "disk") {
+    let size: number;
+    try {
+      size = await diskFileSize(id);
+    } catch {
+      await deleteMeta(id);
+      return gone();
+    }
+
+    const stream = createReadStream(diskFilePath(id));
+    stream.on("error", () => {});
+    stream.on("close", () => {
+      // One-time: remove file + metadata only after a fully successful send.
+      if (stream.readableEnded) {
+        void deleteDiskFile(id);
+        void deleteMeta(id);
+      }
+    });
+
+    const body = Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>;
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(size),
+        "Content-Disposition": contentDisposition(meta.name),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  // --- Cloud mode: 302-redirect the browser to a short-lived Supabase URL. ---
   let downloadUrl: string;
   try {
     downloadUrl = await createDownloadUrl(id, meta.name, 120);
   } catch {
     return new Response("This file is currently unavailable.", { status: 503 });
   }
-
-  // One-time: drop the metadata so the link 410s from now on. The object itself
-  // is reclaimed by the scheduled cleanup (we can't delete it here — the browser
-  // is about to fetch it through the signed URL we just issued).
   await deleteMeta(id);
-
   return new Response(null, {
     status: 302,
     headers: { Location: downloadUrl, "Cache-Control": "no-store" },

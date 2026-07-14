@@ -1,6 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -22,6 +22,9 @@ export interface FileMeta {
   size: number;
   type: string;
   createdAt: number;
+  // Where the file bytes live: "supabase" (deployed) or "disk" (local LAN mode).
+  // Missing is treated as "supabase" for backwards compatibility.
+  storage?: "supabase" | "disk";
 }
 
 const STORE_NAME = "meta";
@@ -120,4 +123,23 @@ export async function deleteMeta(id: string): Promise<void> {
     if (isMissingBlobsEnv(err)) return diskDelete(id);
     throw err;
   }
+}
+
+// --- local-mode file bytes (stored on disk next to the metadata) -----------
+
+/** Path where a local-mode upload's raw bytes are stored. */
+export function diskFilePath(id: string): string {
+  return path.join(STORAGE_DIR, id);
+}
+
+export async function ensureStorageDir(): Promise<void> {
+  await mkdir(STORAGE_DIR, { recursive: true });
+}
+
+export async function diskFileSize(id: string): Promise<number> {
+  return (await stat(diskFilePath(id))).size;
+}
+
+export async function deleteDiskFile(id: string): Promise<void> {
+  await unlink(diskFilePath(id)).catch(() => {});
 }

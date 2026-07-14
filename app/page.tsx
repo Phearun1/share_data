@@ -4,7 +4,12 @@ import { createClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/format";
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/limits";
+import {
+  MAX_LOCAL_BYTES,
+  MAX_LOCAL_LABEL,
+  MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_LABEL,
+} from "@/lib/limits";
 import { Logo } from "./logo";
 
 type Status = "idle" | "uploading" | "done" | "error";
@@ -18,6 +23,50 @@ interface Result {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// Local mode: forced with NEXT_PUBLIC_LOCAL_MODE=1 (the `npm run local` script),
+// or whenever Supabase isn't configured. Files then upload to this server's disk
+// instead of the cloud — works on networks that block external uploads.
+const LOCAL_MODE =
+  process.env.NEXT_PUBLIC_LOCAL_MODE === "1" || !(SUPABASE_URL && SUPABASE_ANON_KEY);
+const MAX_BYTES = LOCAL_MODE ? MAX_LOCAL_BYTES : MAX_UPLOAD_BYTES;
+const MAX_LABEL = LOCAL_MODE ? MAX_LOCAL_LABEL : MAX_UPLOAD_LABEL;
+
+/** Upload straight to this server (local mode) with real progress. */
+function diskUpload(
+  file: File,
+  onProgress: (fraction: number) => void,
+): Promise<{ id: string; name: string; size: number }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+    xhr.setRequestHeader("x-filename", encodeURIComponent(file.name));
+    xhr.setRequestHeader("x-filetype", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          reject(new Error("The server sent an unexpected response."));
+        }
+      } else {
+        let message = `Upload failed (HTTP ${xhr.status}).`;
+        try {
+          const d = JSON.parse(xhr.responseText) as { error?: string };
+          if (d.error) message = d.error;
+        } catch {
+          // keep generic message
+        }
+        reject(new Error(message));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Failed to fetch"));
+    xhr.send(file);
+  });
+}
 
 /** Turn a raw fetch/network failure into a clear, actionable message. */
 function describeUploadError(raw: string): string {
@@ -37,6 +86,7 @@ function describeUploadError(raw: string): string {
 
 export default function HomePage() {
   const [status, setStatus] = useState<Status>("idle");
+  const [progress, setProgress] = useState(-1); // -1 = indeterminate
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -46,8 +96,6 @@ export default function HomePage() {
   const [qr, setQr] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Prevent the browser from navigating away when a file is dropped anywhere
-  // outside the dropzone (which would discard the app and the generated link).
   useEffect(() => {
     const prevent = (event: DragEvent) => event.preventDefault();
     window.addEventListener("dragover", prevent);
@@ -58,7 +106,6 @@ export default function HomePage() {
     };
   }, []);
 
-  // Render a QR code for the share link (loaded lazily, only when needed).
   useEffect(() => {
     if (!result) {
       setQr("");
@@ -67,7 +114,6 @@ export default function HomePage() {
     let alive = true;
     import("qrcode")
       .then((mod) => {
-        // qrcode is a CommonJS module; grab toDataURL through interop safely.
         const QR = ((mod as unknown as { default?: unknown }).default ?? mod) as {
           toDataURL: (text: string, opts?: unknown) => Promise<string>;
         };
@@ -89,18 +135,10 @@ export default function HomePage() {
   }, [result]);
 
   const upload = useCallback(async (file: File) => {
-    if (file.size > MAX_UPLOAD_BYTES) {
+    if (file.size > MAX_BYTES) {
       setStatus("error");
       setResult(null);
-      const message = `That file is ${formatBytes(file.size)}. The maximum is ${MAX_UPLOAD_LABEL}.`;
-      setError(message);
-      setLive(message);
-      return;
-    }
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      setStatus("error");
-      const message =
-        "Storage isn't configured yet. Set the Supabase environment variables (see README).";
+      const message = `That file is ${formatBytes(file.size)}. The maximum is ${MAX_LABEL}.`;
       setError(message);
       setLive(message);
       return;
@@ -111,46 +149,57 @@ export default function HomePage() {
     setResult(null);
     setCopied(false);
     setHint("");
+    setProgress(LOCAL_MODE ? 0 : -1);
     setLive("Uploading…");
 
     try {
-      // 1) Ask our server for a one-time signed upload ticket.
-      const ticketRes = await fetch("/api/create-upload", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
-      });
-      if (!ticketRes.ok) {
-        const data = (await ticketRes.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? `Could not start upload (HTTP ${ticketRes.status}).`);
-      }
-      const { id, bucket, path, token } = (await ticketRes.json()) as {
-        id: string;
-        bucket: string;
-        path: string;
-        token: string;
-      };
+      let id: string;
+      let name: string;
+      let size: number;
 
-      // 2) Upload the file straight to Supabase Storage (bypasses our server).
-      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { persistSession: false },
-      });
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .uploadToSignedUrl(path, token, file, {
-          contentType: file.type || "application/octet-stream",
+      if (LOCAL_MODE) {
+        // Upload straight to this server's disk (no internet involved).
+        const res = await diskUpload(file, (fraction) => setProgress(fraction));
+        id = res.id;
+        name = res.name;
+        size = res.size;
+      } else {
+        // Cloud: get a signed URL, then upload directly to Supabase Storage.
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+          throw new Error("Storage isn't configured. See the README.");
+        }
+        const ticketRes = await fetch("/api/create-upload", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
         });
-      if (uploadError) {
-        throw new Error(uploadError.message || "Upload failed.");
+        if (!ticketRes.ok) {
+          const data = (await ticketRes.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error ?? `Could not start upload (HTTP ${ticketRes.status}).`);
+        }
+        const ticket = (await ticketRes.json()) as {
+          id: string;
+          bucket: string;
+          path: string;
+          token: string;
+        };
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { persistSession: false },
+        });
+        const { error: uploadError } = await supabase.storage
+          .from(ticket.bucket)
+          .uploadToSignedUrl(ticket.path, ticket.token, file, {
+            contentType: file.type || "application/octet-stream",
+          });
+        if (uploadError) {
+          throw new Error(uploadError.message || "Upload failed.");
+        }
+        id = ticket.id;
+        name = file.name;
+        size = file.size;
       }
 
-      // 3) Success — build the share link.
-      setResult({
-        id,
-        name: file.name,
-        size: file.size,
-        url: `${window.location.origin}/f/${id}`,
-      });
+      setResult({ id, name, size, url: `${window.location.origin}/f/${id}` });
       setStatus("done");
       setLive("Upload complete. Your share link is ready.");
     } catch (err) {
@@ -185,6 +234,7 @@ export default function HomePage() {
 
   const reset = useCallback(() => {
     setStatus("idle");
+    setProgress(-1);
     setResult(null);
     setError("");
     setCopied(false);
@@ -211,6 +261,8 @@ export default function HomePage() {
     }
   }, [result]);
 
+  const pct = Math.round((progress < 0 ? 0 : progress) * 100);
+
   return (
     <main className="page">
       <div className="shell">
@@ -219,7 +271,7 @@ export default function HomePage() {
           <h1 className="title">Send a file</h1>
           <p className="eyebrow">
             <span className="dot" />
-            One-time link · up to {MAX_UPLOAD_LABEL}
+            One-time link · up to {MAX_LABEL}
           </p>
         </header>
 
@@ -287,11 +339,20 @@ export default function HomePage() {
                 className="progress"
                 role="progressbar"
                 aria-label="Uploading"
-                aria-valuetext="Uploading"
+                aria-valuenow={progress >= 0 ? pct : undefined}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuetext={progress >= 0 ? undefined : "Uploading"}
               >
-                <div className="progress-bar progress-indeterminate" />
+                {progress >= 0 ? (
+                  <div className="progress-bar" style={{ width: `${pct}%` }} />
+                ) : (
+                  <div className="progress-bar progress-indeterminate" />
+                )}
               </div>
-              <div className="progress-label">Uploading…</div>
+              <div className="progress-label">
+                {progress >= 0 ? `${pct}%` : "Uploading…"}
+              </div>
             </div>
           ) : (
             <>
@@ -347,10 +408,13 @@ export default function HomePage() {
           <input ref={inputRef} type="file" hidden onChange={onPick} />
         </section>
 
-        <p className="footer">Files are stored privately and removed after download.</p>
+        <p className="footer">
+          {LOCAL_MODE
+            ? "Running locally — files stay on this computer and are removed after download."
+            : "Files are stored privately and removed after download."}
+        </p>
       </div>
 
-      {/* Always-mounted live region so screen readers hear state changes. */}
       <div className="sr-only" role="status" aria-live="polite">
         {live}
       </div>
