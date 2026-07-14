@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@supabase/supabase-js";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/format";
@@ -412,6 +413,11 @@ export default function HomePage() {
           {LOCAL_MODE
             ? "Running locally — files stay on this computer and are removed after download."
             : "Files are stored privately and removed after download."}
+        </p>
+        <p className="footer">
+          <Link className="footer-link" href="/p2p">
+            On the same Wi‑Fi? Send device‑to‑device →
+          </Link>
         </p>
       </div>
 

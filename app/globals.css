@@ -501,6 +501,47 @@ a {
   text-align: center;
 }
 
+.footer-link {
+  color: var(--accent-strong);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
+}
+
+/* --- peer-to-peer (same-network) mode ----------------------------------- */
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-align: center;
+  color: var(--accent-strong);
+  background: var(--accent-tint);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 16px 8px 16px 20px;
+}
+
+.muted-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.input-lg {
+  text-transform: uppercase;
+  text-align: center;
+  letter-spacing: 0.2em;
+  font-size: 18px;
+  padding: 13px 12px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
