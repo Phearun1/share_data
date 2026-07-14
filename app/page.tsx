@@ -19,6 +19,22 @@ interface Result {
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+/** Turn a raw fetch/network failure into a clear, actionable message. */
+function describeUploadError(raw: string): string {
+  const r = (raw || "").toLowerCase();
+  const networkFailure =
+    r.includes("failed to fetch") || // Chrome / Edge
+    r.includes("load failed") || // Safari
+    r.includes("networkerror") || // Firefox
+    r.includes("connection reset") ||
+    r.includes("err_connection") ||
+    r.includes("err_network");
+  if (networkFailure) {
+    return "Your network may be blocking the upload — try another network (home Wi‑Fi or a phone hotspot), turn off any VPN, or use a different browser.";
+  }
+  return raw || "Something went wrong during the upload.";
+}
+
 export default function HomePage() {
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<Result | null>(null);
@@ -138,8 +154,9 @@ export default function HomePage() {
       setStatus("done");
       setLive("Upload complete. Your share link is ready.");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong during upload.";
+      const raw =
+        err instanceof Error ? err.message : "Something went wrong during the upload.";
+      const message = describeUploadError(raw);
       setError(message);
       setStatus("error");
       setLive(message);
